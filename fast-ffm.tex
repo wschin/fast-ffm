@@ -27,19 +27,23 @@
 \end{center}
 
 \section{Field-aware Factorization Machine}
-Assume that we have a feature vector $\bx\in\bbr^n$ and $\field(j)$ denotes the field ID of $j$th coordinate in $\bx$.
+Assume that we have a feature vector $\bx\in\bbr^n$, $\field(j)$ denotes the field ID of $j$th coordinate in $\bx$, and $m$ is the number of all possible fields.
 The output function of field-aware factorization can be written as
+\begin{equation*}
+    \hat{y} = \dotprod{\bw}{\bx} + \sum_{j=1}^n \sum_{j'=j+1}^n \dotprod{\bv_{j, \field(j')}}{\bv_{j', \field(j)}} x_jx_{j'}
+\end{equation*}
+or equivalently
 \begin{equation}
     \begin{aligned}
-    \hat{y} = \dotprod{\bw}{\bw} &+ \sum_{f=1}^m \sum_{\substack{j=1 \\ \field(j)=f}}^n \sum_{\substack{j'=1 \\ \field(j') = f \\ j\ne j'}}^n \dotprod{\bv_{j, f}}{\bv_{j', f}} \\
-                                 &+ \sum_{f=1}^m\sum_{f'=f+1}^m \dotprod{\bq_{f\rightarrow f'}}{\bq_{f'\rightarrow f}},
+        \hat{y} = \dotprod{\bw}{\bx} &+ \sum_{f=1}^m \underbracket[1.5pt][5pt]{\sum_{\substack{j=1 \\ \field(j)=f}}^n \sum_{\substack{j'=1 \\ \field(j') = f \\ j' > j}}^n \dotprod{\bv_{j, f}}{\bv_{j', f}}x_jx_{j'}}_{\text{intra-field interactions in field $f$}} \\
+                                 &+ \sum_{f=1}^m\sum_{f'=f+1}^m \underbracket[1.5pt][12pt]{\dotprod{\bq_{f\rightarrow f'}}{\bq_{f'\rightarrow f}}}_{\mathclap{\text{inter-field interactions between field $f$ and $f'$}}},
     \end{aligned}
     \label{eq:FfmOut}
 \end{equation}
-where $\bw$ is linear coefficient, $\bv_{j, f}$ is the latent vector of the $j$th feature in the $f$th field's hidden space, and
-\begin{equation}
-    \bq_{j\rightarrow j'} = \sum_{ \substack{j=1 \\ \field(j)=f} }^n \bv_{j, f'} x_j.
-\end{equation}
+where $\dotprod{\cdot}{\cdot}$ stands for inner product, $\bw$ is linear coefficient, $\bv_{j, f}$ is the $j$th feature's latent vector in the $f$th field's hidden space, and
+\begin{equation*}
+    \bq_{f\rightarrow f'} = \sum_{ \substack{j=1 \\ \field(j)=f} }^n \bv_{j, f'} x_j.
+\end{equation*}
 Note that $\hat{y}$ is actually an abbreviation of $\hat{y}(\bx)$, a function which maps the given feature vector to a real number.
 Also, we summarize the derivatives of \eqref{eq:FfmOut} with respect to FFM parameters below for later discussion.
 \begin{itemize}
@@ -59,26 +63,27 @@ Also, we summarize the derivatives of \eqref{eq:FfmOut} with respect to FFM para
             \label{eq:InterGrad}
         \end{equation}
 \end{itemize}
-To determine FFM's parameters, $\bw$ and $\bv_{j, f}$, $j=1,\dots,n$ and $f=1,\dots,m$, we consider an emperical risk minimization problem.
-If $l$ label-feature pairs, $(y_1,\bx_1),\dots,(y_l,\bx_l)$, are available, our objective function is
+As you may have observed in \eqref{eq:FfmOut}, FFM is parameterized by $\bw$ and $\bv_{j, f}$, $j=1,\dots,n$ and $f=1,\dots,m$.
+To determine those parameters, we consider an empirical risk minimization problem.
+If abel-feature pairs, $(y_1,\bx_1),\dots,(y_l,\bx_l)$, are available, our objective function is
 \begin{equation}
-    \min_{\bw, \bv_{1, 1},\dots,\bv_{n, m}} \quad  \mathcal \sum_{i=1}^l \left( \sum_{\substack{j=1 \\ x_{i,j} \ne 0}}^n \left(\frac{\lambda}{2} w_j^2 + \sum_{f=1}^m \frac{\lambda'}{2} \norm{\bv_{j,f}}^2\right) + \xi(\hat{y}_i; y_i) \right),
+    \min_{\bw, \bv_{1, 1},\dots,\bv_{n, m}} \quad  \mathcal \sum_{i=1}^l \left( \sum_{\substack{j=1 \\ x_{ij} \ne 0}}^n \left(\frac{\lambda}{2} w_j^2 + \sum_{f=1}^m \frac{\lambda'}{2} \norm{\bv_{j,f}}^2\right) + \xi(\hat{y}_i; y_i) \right),
     \label{eq:Prob}
 \end{equation}
-where $x_{i,j}$ is the the $j$th feature of the $i$th example, $\xi(\hat{y};y)$ is the considered loss function, and $\hat{y}_i=\hat{y}(\bx_i)$.
+where $x_{ij}$ is the the $j$th feature of the $i$th example, $\xi(\hat{y};y)$ is the considered loss function, and $\hat{y}_i=\hat{y}(\bx_i)$.
 Note that for binary classification, a common choice is $\xi(\hat{y};y) = \log(1+e^{-y\hat{y}})$, and for regression problems, one may consider $\xi(\hat{y};y) = (\hat{y}-y)^2$.
 
 \section{Stochastic Gradient Methods for Solving \eqref{eq:Prob}}
 We consider an advanced stochastic gradient method, ADAGRAD, to solve \eqref{eq:Prob}.
 Let
 \begin{equation*}
-    \xi'(\hat{y}_i; y_i) = \frac{\partial \xi(\hat{y}_i; y_i)}{\partial \hat{y}_i}.
+    \xi_i' = \frac{\partial \xi(\hat{y}_i; y_i)}{\partial \hat{y}_i}.
 \end{equation*}
-With \eqref{eq:LinGrad}, \eqref{eq:IntraGrad}, and \eqref{eq:InterGrad}, the $i$th example's gradient can be computed via
+With \eqref{eq:LinGrad}, \eqref{eq:IntraGrad}, \eqref{eq:InterGrad}, and chain rule, the $i$th example's gradient can be computed via
 \begin{equation}
     g_{w_j} = 
     \begin{cases}
-        \lambda w_j + \xi(\hat{y}_i; y_i)' x_{i,j} &\text{ if } x_{i,j} \ne 0\\
+        \lambda w_j + \xi_i' x_{ij} &\text{ if } x_{ij} \ne 0\\
         0 &\text{ otherwise}
     \end{cases}
     \label{eq:GradW}
@@ -87,23 +92,21 @@ and
 \begin{equation}
     \bg_{\bv_{j, k}} = 
     \begin{cases}
-        \lambda' \bv_{j,\field(j)} + \xi'(\hat{y}_i; y_i) (\bq_{\field(j) \rightarrow \field(j)} - \bv_{j, \field(j)}x_{i,j}) x_{i,j} & \text{ if } k=\field(j) \text{ and } x_{i,j}\ne 0\\
-        \lambda' \bv_{j,k} + \xi'(\hat{y}_i; y_i) \bq_{k\rightarrow \field(j)} x_{i,j} & \text{ if } k\ne \field(j) \text{ and } x_{i,j}\ne 0\\
+        \lambda' \bv_{j,\field(j)} + \xi_i' (\bq_{\field(j) \rightarrow \field(j)} - \bv_{j, \field(j)}x_{ij}) x_{ij} & \text{ if } k=\field(j) \text{ and } x_{ij}\ne 0\\
+        \lambda' \bv_{j,k} + \xi_i' \bq_{k\rightarrow \field(j)} x_{ij} & \text{ if } k\ne \field(j) \text{ and } x_{ij}\ne 0\\
         \bsym{0} & \text{ otherwise}.
     \end{cases}
     \label{eq:GradV}
 \end{equation}
 For the sake of simplicity, we drop the example index $i$ if the context is clear.
-One our training iteration can be decomposed into two consecutive steps, Algorithm \ref{alg:FfmStep1} and Algorithm \ref{alg:FfmStep2}.
-In the first step, we compute \eqref{eq:FfmOut}.
+One our training iteration can be decomposed into two consecutive steps, Algorithm 1 and Algorithm 2.
+In the first step, we compute the output value via \eqref{eq:FfmOut}.
 The second step calculates the stochastic gradient and then update the model.
-Notice that some intermediate variables, $\hat{y}$, $\bq_{f\rightarrow f'}$, $\forall f,f'\in\{1,\dots,m\}$, obtained in Algorithm \ref{alg:FfmStep1} can be reused in the following step.
-Consequently, our full algorithm is summarized in Algorithm \ref{alg:Main}.
+Notice that some intermediate variables, $\hat{y}$ and $\bq_{f\rightarrow f'}$, $\forall f,f'\in\{1,\dots,m\}$, obtained in Algorithm 1 can be reused in this step.
+Our full algorithm is summarized in Algorithm 3.
 \begin{algorithm}
-    \label{alg:FfmStep1}
-    \caption{Evaluation of \eqref{eq:FfmOut}.}
     \begin{algorithmic}[1]
-        \State Prepare model parameters $\bw,\bv_{1,1},\dots,\bv_{n,m}$.
+        \State Given model parameters $\bw,\bv_{1,1},\dots,\bv_{n,m}$.
         \State Apply zero initialization to $\hat{y},\bq_{1,1},\dots,\bq_{m,m}$.
         \For { $j = 1,\dots,n$}
             \If { $x_j=0$ }
@@ -115,12 +118,10 @@ Consequently, our full algorithm is summarized in Algorithm \ref{alg:Main}.
             \EndFor
         \EndFor
         \For {$f=1,\dots,m$}
+            \State $\hat{y} \gets \hat{y} + \frac{1}{2}\dotprod{\bq_{f\rightarrow f}}{\bq_{f\rightarrow f}}$ \Comment{intra-field interaction}
             \For {$f'=f+1,\dots,m$}
                 \State $\hat{y}\gets \hat{y} + \dotprod{\bq_{f\rightarrow f'}}{\bq_{f'\rightarrow f}}$ \Comment{inter-field interaction}
             \EndFor
-        \EndFor
-        \For {$f=1,\dots,m$}
-            \State $\hat{y} \gets \hat{y} + \frac{1}{2}\dotprod{\bq_{f\rightarrow f}}{\bq_{f\rightarrow f}}$ \Comment{intra-field interaction}
         \EndFor
         \For { $j=1,\dots,n$}
             \If { $x_j=0$ }
@@ -129,14 +130,15 @@ Consequently, our full algorithm is summarized in Algorithm \ref{alg:Main}.
             \State $\hat{y} \gets \hat{y} - \frac{1}{2} \dotprod{\bv_{\field(j),\field(j)}}{\bv_{\field(j),\field(j)}}x_j^2$ \Comment{remove self-interaction}
         \EndFor
     \end{algorithmic}
+    \label{alg:FfmStepOne}
+    \caption{Evaluation of \eqref{eq:FfmOut}.}
 \end{algorithm}
+
 \begin{algorithm}
-    \label{alg:FfmStep2}
-    \caption{Update of parameters via stochastic gradient method. We use $\diag(\cdot)$ to denote the diagonal matrix formed by the input vector.}
     \begin{algorithmic}[1]
-        \State Prepare model parameters $\bw,\bv_{1,1},\dots,\bv_{n,m}$, their learning rates $G_1,\dots,G_j,H_{1,1},\dots,H_{n,m}$, and $\bq_{1,1},\dots,\bq_{m,m}$ obtained via Algorithm \ref{alg:FfmStep1}.
+        \State Given model parameters $\bw,\bv_{1,1},\dots,\bv_{n,m}$, their learning rates $G_1,\dots,G_j,H_{1,1},\dots,H_{n,m}$, and $\bq_{1,1},\dots,\bq_{m,m}$ obtained via Algorithm \ref{alg:FfmStepOne}.
         \State Apply zero initialization to $\hat{y},\bq_{1,1},\dots,\bq_{m,m}$.
-        \State Compute $\xi'(\hat{y};y)$.
+        \State Compute $\xi_i'$.
         \For {$j=1,\dots,n$}
             \If {$x_j=0$}
                 \State {\bf continue}
@@ -156,19 +158,21 @@ Consequently, our full algorithm is summarized in Algorithm \ref{alg:Main}.
             \EndFor
         \EndFor
     \end{algorithmic}
+    \label{alg:FfmStepTwo}
+    \caption{Update of parameters via stochastic gradient method. We use $\diag(\cdot)$ to denote the diagonal matrix formed by the input vector.}
 \end{algorithm}
 \begin{algorithm}
-    \label{alg:Main}
-    \caption{A $T$-iteration procedure for learning field-aware factorization machine.}
     \begin{algorithmic}[1]
-        \State Initialize $\bw,\bv_{1,1},\dots,\bv_{n,m}$ with random variables.
+        \State Initialize $\bw,\bv_{1,1},\dots,\bv_{n,m}$ with random variables and specify leraning rate scale $\eta$.
         \State Assign one to all learning rates, $G_1,\dots,G_j,H_{1,1},\dots,H_{n,m}$.
         \For {$t=1,\dots,T$}
-            \State Sample an example $(y, \bx)$.
-            \State Perform Algorithm \ref{alg:FfmStep1}.
-            \State Perform Algorithm \ref{alg:FfmStep2}.
+            \State Sample $(y, \bx)$.
+            \State Perform Algorithm 1.
+            \State Perform Algorithm 2.
         \EndFor
     \end{algorithmic}
+    \label{alg:Main}
+    \caption{A $T$-iteration procedure for learning field-aware factorization machine.}
 \end{algorithm}
 
 \end{document}
